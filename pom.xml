@@ -12,7 +12,7 @@
 	<packaging>pom</packaging>
 	<properties>
 		<entity.model.version>1.0.11</entity.model.version>
-		<eql.version>1.0-SNAPSHOT</eql.version>
+		<eql.version>1.0</eql.version>
 	</properties>
 	<modules>
 		<module>nifi-eql-processor-processors</module>
