@@ -15,13 +15,27 @@
  */
 package com.mtnfog.test;
 
+import static org.junit.Assert.*;
+
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.lang.reflect.Type;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
+import org.apache.commons.io.IOUtils;
+import org.apache.nifi.util.MockFlowFile;
 import org.apache.nifi.util.TestRunner;
 import org.apache.nifi.util.TestRunners;
 import org.junit.Before;
 import org.junit.Test;
 
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
 import com.mtnfog.EqlProcessor;
+import com.mtnfog.entity.Entity;
 
 public class EqlProcessorTest {
 
@@ -33,25 +47,58 @@ public class EqlProcessorTest {
     }
 
     @Test
-    public void testOnTrigger() throws IOException {
+    public void testOnTrigger1() throws IOException {
     	
-        /*InputStream content = new ByteArrayInputStream("George Washington was president.".getBytes());
+    	Set<Entity> entities = new HashSet<Entity>();
+    	entities.add(new Entity("George Washington"));
+    	entities.add(new Entity("Abraham Lincoln"));
+    	
+    	Gson gson = new Gson();
+    	
+        InputStream content = new ByteArrayInputStream(gson.toJson(entities).getBytes());
         
-        runner.setProperty(EqlProcessor.IDYL_E3_HOST, "http://localhost:9000/");
-        runner.setProperty(EqlProcessor.IDYL_E3_CONTEXT, "${uuid}");
+        runner.setProperty(EqlProcessor.EQL_QUERY, "select * from entities where text = \"George Washington\"");
         runner.enqueue(content);
         runner.run(1);
         runner.assertQueueEmpty();
         
-        List<MockFlowFile> results = runner.getFlowFilesForRelationship(EqlProcessor.REL_SUCCESS);
+        List<MockFlowFile> results = runner.getFlowFilesForRelationship(EqlProcessor.REL_MATCHES);
         assertTrue("1 match", results.size() == 1);
         MockFlowFile result = results.get(0);
 
         String json = IOUtils.toString(runner.getContentAsByteArray(result), "UTF-8");
         Type listType = new TypeToken<HashSet<Entity>>(){}.getType();
-        Set<Entity> entities = new Gson().fromJson(json, listType);
+        Set<Entity> filteredEntities = new Gson().fromJson(json, listType);
              
-        assertEquals(1, entities.size());*/
+        assertEquals(1, filteredEntities.size());
+        
+    }
+    
+    @Test
+    public void testOnTrigger2() throws IOException {
+    	
+    	Set<Entity> entities = new HashSet<Entity>();
+    	entities.add(new Entity("George Washington"));
+    	entities.add(new Entity("Abraham Lincoln"));
+    	
+    	Gson gson = new Gson();
+    	
+        InputStream content = new ByteArrayInputStream(gson.toJson(entities).getBytes());
+        
+        runner.setProperty(EqlProcessor.EQL_QUERY, "select * from entities where text = \"Thomas Jefferson\"");
+        runner.enqueue(content);
+        runner.run(1);
+        runner.assertQueueEmpty();
+        
+        List<MockFlowFile> results = runner.getFlowFilesForRelationship(EqlProcessor.REL_MATCHES);
+        assertTrue("1 match", results.size() == 1);
+        MockFlowFile result = results.get(0);
+
+        String json = IOUtils.toString(runner.getContentAsByteArray(result), "UTF-8");
+        Type listType = new TypeToken<HashSet<Entity>>(){}.getType();
+        Set<Entity> filteredEntities = new Gson().fromJson(json, listType);
+             
+        assertEquals(0, filteredEntities.size());
         
     }
     

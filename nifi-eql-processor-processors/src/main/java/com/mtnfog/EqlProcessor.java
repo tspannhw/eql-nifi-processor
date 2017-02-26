@@ -18,8 +18,10 @@ package com.mtnfog;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.lang.reflect.Type;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -46,23 +48,28 @@ import org.apache.nifi.processor.exception.ProcessException;
 import org.apache.nifi.processor.io.StreamCallback;
 import org.apache.nifi.processor.util.StandardValidators;
 
-@Tags({ "nlp, entities, extraction" })
-@CapabilityDescription("Provides entity extraction through Idyl E3.")
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
+import com.mtnfog.entity.Entity;
+import com.mtnfog.entitydb.eql.filters.EqlFilters;
+
+@Tags({ "query, entities, extraction" })
+@CapabilityDescription("Provides entity filtering using the Entity Query Language.")
 @SeeAlso({})
 @ReadsAttributes({ @ReadsAttribute(attribute = "", description = "") })
 @WritesAttributes({ @WritesAttribute(attribute = "", description = "") })
 public class EqlProcessor extends AbstractProcessor {
 
-	public static final PropertyDescriptor IDYL_E3_HOST = new PropertyDescriptor.Builder()
-			.name("Endpoint")
-			.defaultValue("http://localhost:9000")
-			.description("The Idyl E3 IP or host name endpoint such as http://localhost:9000.")
+	public static final PropertyDescriptor EQL_QUERY = new PropertyDescriptor.Builder()
+			.name("EQL Query")
+			.defaultValue("select * from entities")
+			.description("The EQL query to filter the entities.")
 			.required(true)
 			.addValidator(StandardValidators.NON_EMPTY_VALIDATOR)
 			.build();
 	
-	public static final Relationship REL_SUCCESS = new Relationship.Builder()
-			.name("success").description("success").build();
+	public static final Relationship REL_MATCHES = new Relationship.Builder()
+			.name("matches").description("matches").build();
 
 	public static final Relationship REL_FAILURE = new Relationship.Builder()
 			.name("failure").description("failure").build();
@@ -70,17 +77,21 @@ public class EqlProcessor extends AbstractProcessor {
 	private List<PropertyDescriptor> descriptors;
 	private Set<Relationship> relationships;
 	
+	private Gson gson;
+	
 	@Override
 	protected void init(final ProcessorInitializationContext context) {
 		
 		descriptors = new ArrayList<PropertyDescriptor>();
-		descriptors.add(IDYL_E3_HOST);
+		descriptors.add(EQL_QUERY);
 		descriptors = Collections.unmodifiableList(descriptors);
 
 		relationships = new HashSet<Relationship>();
-		relationships.add(REL_SUCCESS);
+		relationships.add(REL_MATCHES);
 		relationships.add(REL_FAILURE);
 		relationships = Collections.unmodifiableSet(relationships);		
+		
+		gson = new Gson();
 		
 	}
 
@@ -108,7 +119,7 @@ public class EqlProcessor extends AbstractProcessor {
 			return;
 		}
 		
-		final String host = ctx.getProperty(IDYL_E3_HOST).getValue();
+		final String eql = ctx.getProperty(EQL_QUERY).getValue();
 
 		final AtomicReference<String> value = new AtomicReference<>();
 		
@@ -121,23 +132,24 @@ public class EqlProcessor extends AbstractProcessor {
 					
 					String input = IOUtils.toString(inputStream, Charset.forName("UTF-8"));
 					
-					/*EntityExtractionResponse response = idylE3Client.extract(input, confidence, context, documentId, language, type);
+					Type listType = new TypeToken<ArrayList<Entity>>(){}.getType();
+					List<Entity> entities = gson.fromJson(input, listType);
 					
-					final String json = gson.toJson(response.getEntities());
+					Collection<Entity> filteredEntities = EqlFilters.filterEntities(entities, eql);
+
+					final String json = gson.toJson(filteredEntities);
 					value.set(json);
-					IOUtils.write(json, outputStream, Charset.forName("UTF-8"));*/									
+					IOUtils.write(json, outputStream, Charset.forName("UTF-8"));							
 	
 				}
 				
 			});
 			
-	        flowFile = session.putAttribute(flowFile, "idyl-e3-response", value.get());
-	
-			session.transfer(flowFile, REL_SUCCESS);
+			session.transfer(flowFile, REL_MATCHES);
 			
 		} catch (Exception ex) {
 			
-			getLogger().error(String.format("Unable to extract entities using Idyl E3 at: %s. Exception: %s", host, ex.getMessage()), ex);
+			getLogger().error(String.format("Unable to filter entities with EQL: %s. Exception: %s", eql, ex.getMessage()), ex);
 			session.transfer(flowFile, REL_FAILURE);
 			
 		}
